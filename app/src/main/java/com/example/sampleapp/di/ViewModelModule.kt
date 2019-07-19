@@ -1,6 +1,6 @@
 package com.example.sampleapp.di
 
-import android.arch.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider
 import com.example.sampleapp.viewmodel.SampleAppViewModelFactory
 import dagger.Binds
 import dagger.Module

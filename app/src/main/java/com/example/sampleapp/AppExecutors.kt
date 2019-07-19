@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.sunnyjain.todo3
+package com.example.sampleapp
 
 import android.os.Handler
 import android.os.Looper
