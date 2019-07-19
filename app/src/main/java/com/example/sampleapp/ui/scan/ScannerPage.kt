@@ -1,32 +1,35 @@
 package com.example.sampleapp.ui.scan
 
 
-import android.Manifest
-import android.annotation.SuppressLint
+import android.Manifest.permission.CAMERA
+import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
 import android.app.Activity
-import android.content.Context
-import android.content.Context.CAMERA_SERVICE
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraAccessException
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.util.Log
-import android.view.*
-import androidx.fragment.app.Fragment
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
-import com.camerakit.CameraKitView
-
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProviders
 import com.example.sampleapp.R
 import com.example.sampleapp.di.Injectable
-import com.google.android.gms.vision.CameraSource
-import com.google.android.gms.vision.Detector
-import com.google.android.gms.vision.barcode.Barcode
-import com.google.android.gms.vision.barcode.BarcodeDetector
-import java.io.IOException
+import com.example.sampleapp.utils.Constants.Companion.CAMERA_INIT_REQUIRED
+import com.example.sampleapp.utils.Constants.Companion.CAMERA_PAUSED
+import com.example.sampleapp.utils.Constants.Companion.CAMERA_RESUMED
+import com.example.sampleapp.utils.Constants.Companion.CAMERA_STARTED
+import com.example.sampleapp.utils.Constants.Companion.CAMERA_STOPPED
+import com.example.sampleapp.vo.ScannedItem
+import com.google.zxing.Result
+import me.dm7.barcodescanner.zxing.ZXingScannerView
 import javax.inject.Inject
 
 
@@ -34,25 +37,21 @@ import javax.inject.Inject
  * A simple [Fragment] subclass.
  *
  */
-class ScannerPage : Fragment(), Injectable, Detector.Processor<Barcode> {
+class ScannerPage : Fragment(), Injectable, ZXingScannerView.ResultHandler {
 
 
-    override fun release() {
+    @Inject
+    lateinit var viewModelFactory: ViewModelProvider.Factory
 
-    }
-
-    override fun receiveDetections(p0: Detector.Detections<Barcode>?) {
-        Log.e("p0", p0!!.detectedItems[0].displayValue)
-    }
-
+    private lateinit var scannerPageViewModel: ScannerPageViewModel
+    private lateinit var scannedItem: String
 
     lateinit var rootView: View
-    private var scannerSurfaceView: SurfaceView? = null
-    private var surfaceHolder: SurfaceHolder? = null
-    private var scannerCamerSource: CameraSource? = null
-    private var mlbarcodeDetector: BarcodeDetector? = null
     private var activity: Activity? = null
-
+    private lateinit var scannerView: ZXingScannerView
+    private val neededPermissions = arrayOf(CAMERA, WRITE_EXTERNAL_STORAGE)
+    private var handler: Handler? = null
+    private var cameraState = CAMERA_INIT_REQUIRED
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -69,160 +68,142 @@ class ScannerPage : Fragment(), Injectable, Detector.Processor<Barcode> {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         rootView = view
-        scannerSurfaceView = view.findViewById(R.id.scanner_surface_view)
-
+        scannerPageViewModel = ViewModelProviders.of(this, viewModelFactory).get(ScannerPageViewModel::class.java)
+        scannerPageViewModel.scannedItemLiveData.observe(this, Observer { t ->
+            t.let {
+                if(t == null) {
+                    Log.e("scanned item", "new entry")
+                } else {
+                    Log.e("scanned item", t.ScannedString)
+                }
+            }
+        })
+        scannerView = view.findViewById(R.id.scannerView)
+        if (checkPermission()) {
+            //setupSurfaceHolder()
+        }
+        if (handler == null)
+            handler = Handler()
     }
 
     override fun onResume() {
         super.onResume()
-        if (scannerCamerSource == null) {
-            initSurfaceScanner()
-        } else {
-            resumeScannerCamera()
-        }
-
+        if (cameraState == CAMERA_INIT_REQUIRED || cameraState == CAMERA_STOPPED)
+            startCamera()
+        else
+            resumeCamera()
     }
 
     override fun onPause() {
         super.onPause()
-        releaseCamera()
-    }
-
-    override fun onStop() {
-        super.onStop()
-
+        if (cameraState == CAMERA_STARTED)
+            pauseCamera()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-
+        if (cameraState == CAMERA_PAUSED)
+            stopCamera()
     }
 
-    override fun onDetach() {
-        super.onDetach()
-        if (scannerCamerSource != null) {
-            mlbarcodeDetector?.release()
-            scannerCamerSource?.release()
-            scannerCamerSource = null
+    //camera methods
+    private fun startCamera() {
+        cameraState = CAMERA_STARTED
+        scannerView.setResultHandler(this)
+        handler?.post {
+            scannerView.startCamera()
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
+    private fun pauseCamera() {
+        cameraState = CAMERA_PAUSED
+        handler?.post {
+            scannerView.stopCameraPreview()
+        }
+    }
+
+    private fun resumeCamera() {
+        cameraState = CAMERA_RESUMED
+        handler?.post {
+            scannerView.resumeCameraPreview(this)
+        }
+    }
+
+    private fun stopCamera() {
+        cameraState = CAMERA_STOPPED
+        handler?.post {
+            scannerView.stopCamera()
+        }
+
+    }
+
+    override fun handleResult(rawResult: Result?) {
+        Toast.makeText(rootView.context, rawResult?.text, Toast.LENGTH_SHORT).show()
+        scannedItem = rawResult?.text ?: ""
+        scannerPageViewModel.getRecordByScannedItem(scannedItem)
+        resumeCamera()
+    }
+
+
+    private fun checkPermission(): Boolean {
+        val currentAPIVersion = Build.VERSION.SDK_INT
+        if (currentAPIVersion >= android.os.Build.VERSION_CODES.M) {
+            val permissionsNotGranted = ArrayList<String>()
+            for (permission in neededPermissions) {
+                if (ContextCompat.checkSelfPermission(
+                        rootView.context,
+                        permission
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionsNotGranted.add(permission)
+                }
+            }
+            if (permissionsNotGranted.size > 0) {
+                var shouldShowAlert = false
+                for (permission in permissionsNotGranted) {
+                    if (activity != null)
+                        shouldShowAlert = ActivityCompat.shouldShowRequestPermissionRationale(activity!!, permission)
+                }
+
+                val arr = arrayOfNulls<String>(permissionsNotGranted.size)
+                val permissions = permissionsNotGranted.toArray(arr)
+                if (shouldShowAlert) {
+                    showPermissionAlert(permissions)
+                } else {
+                    requestPermissions(permissions, REQUEST_CODE)
+                }
+                return false
+            }
+        }
+        return true
+    }
+
+
+    private fun showPermissionAlert(permissions: Array<String?>) {
+        val alertBuilder = AlertDialog.Builder(rootView.context)
+        alertBuilder.setCancelable(true)
+        alertBuilder.setTitle("Permission Required")
+        alertBuilder.setMessage("sdflsnfg")
+        alertBuilder.setPositiveButton(android.R.string.yes) { _, _ -> requestPermissions(permissions, REQUEST_CODE) }
+        val alert = alertBuilder.create()
+        alert.show()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        when (requestCode) {
+            REQUEST_CODE -> {
+                for (result in grantResults) {
+                    if (result == PackageManager.PERMISSION_DENIED) {
+                        Toast.makeText(rootView.context, "permissions", Toast.LENGTH_LONG).show()
+                        return
+                    }
+                }
+            }
+        }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 123) {
-            if (hasPermission(rootView.context, Manifest.permission.CAMERA)) {
-
-            }
-        } else {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        }
     }
 
-    private fun useRunTimePermissions(): Boolean {
-        return Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1
+    companion object {
+        const val REQUEST_CODE = 100
     }
-
-    fun hasPermission(context: Context, permission: String): Boolean {
-        return !useRunTimePermissions() || ActivityCompat.checkSelfPermission(
-            context,
-            permission
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    fun requestPermissions(activity: Activity, permission: Array<String>, requestCode: Int) {
-        if (useRunTimePermissions()) {
-            activity.requestPermissions(permission, requestCode)
-        }
-    }
-
-
-    private fun initSurfaceScanner() {
-        Log.d("SacnnerPage", "CAMERASTATE: INIT")
-        mlbarcodeDetector = BarcodeDetector.Builder(rootView.context).setBarcodeFormats(Barcode.ALL_FORMATS).build()
-
-        mlbarcodeDetector?.setProcessor(this)
-        scannerCamerSource = CameraSource.Builder(rootView.context, mlbarcodeDetector)
-            .setRequestedPreviewSize(240, 320).setRequestedFps(28.0F)
-            .setAutoFocusEnabled(true).build()
-        if (surfaceHolder != null) {
-            if (ActivityCompat.checkSelfPermission(rootView.context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                if (activity != null)
-                    ActivityCompat.requestPermissions(activity!!, arrayOf(Manifest.permission.CAMERA), 123)
-            } else {
-                try {
-                    if (scannerCamerSource != null)
-                        scannerCamerSource?.start(surfaceHolder)
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-
-            }
-        } else {
-            scannerSurfaceView?.holder?.addCallback(object : SurfaceHolder.Callback2 {
-                override fun surfaceRedrawNeeded(holder: SurfaceHolder) {
-                }
-
-
-                override fun surfaceCreated(holder: SurfaceHolder) {
-                    surfaceHolder = holder
-                    if (ActivityCompat.checkSelfPermission(rootView.context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                        if (activity != null)
-                            ActivityCompat.requestPermissions(activity!!, arrayOf(Manifest.permission.CAMERA), 123)
-                    } else {
-                        try {
-                            if (scannerCamerSource != null)
-                                scannerCamerSource?.start(holder)
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                        }
-
-                    }
-                }
-
-                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                    Log.e("surface", "chaneged")
-                }
-
-                override fun surfaceDestroyed(holder: SurfaceHolder) {
-
-                    if (scannerCamerSource != null) {
-                        scannerCamerSource?.stop()
-
-                    }
-
-                }
-            })
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun resumeScannerCamera() {
-
-        val pm = rootView.context.packageManager
-        if (!pm.hasSystemFeature(PackageManager.FEATURE_CAMERA)) {
-            //show proper ui to it.
-            return
-        }
-        if (scannerCamerSource != null) {
-            try {
-                scannerCamerSource?.start(scannerSurfaceView?.holder)
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-
-        } else {
-            initSurfaceScanner()
-        }
-    }
-
-    private fun releaseCamera() {
-        if (scannerCamerSource != null) {
-            scannerCamerSource?.stop()
-        }
-    }
-
 }

@@ -17,6 +17,6 @@ interface ScansDao {
     @Query("SELECT * FROM ScannedItem")
     fun retrieveAllScannedRecords(): LiveData<MutableList<ScannedItem>>
 
-    @Query("SELECT * FROM ScannedItem where id = :id")
-    fun findById(id: Long) : Single<ScannedItem>
+    @Query("SELECT * FROM ScannedItem where ScannedString = :scannedItem")
+    fun findByScannedItem(scannedItem: String) : Single<ScannedItem?>
 }
