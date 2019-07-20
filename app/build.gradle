@@ -78,8 +78,12 @@ dependencies {
     /**
      * could not make it work as it constantly gave me google services error.
      * Exception stack :
-     *
-     *
+     * W/DynamiteModule( 1417): Local module descriptor class for com.google.android.gms.vision.dynamite not found.
+     * I/DynamiteModule( 1417): Considering local module com.google.android.gms.vision.dynamite:0 and remote module com.google.android.gms.vision.dynamite:801
+     * I/DynamiteModule( 1417): Selected remote version of com.google.android.gms.vision.dynamite, version >= 801
+     * W/DynamiteModule( 1417): Local module descriptor class for com.google.android.gms.vision.dynamite not found.
+     * I/DynamiteModule( 1417): Considering local module com.google.android.gms.vision.dynamite:0 and remote module com.google.android.gms.vision.dynamite:801
+     * I/DynamiteModule( 1417): Selected remote version of com.google.android.gms.vision.dynamite, version >= 801
      *
      */
     //implementation 'com.google.firebase:firebase-ml-vision:22.0.0'
