@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,7 +17,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.example.sampleapp.R
 import com.example.sampleapp.di.Injectable
@@ -27,7 +25,7 @@ import com.example.sampleapp.utils.Constants.Companion.CAMERA_PAUSED
 import com.example.sampleapp.utils.Constants.Companion.CAMERA_RESUMED
 import com.example.sampleapp.utils.Constants.Companion.CAMERA_STARTED
 import com.example.sampleapp.utils.Constants.Companion.CAMERA_STOPPED
-import com.example.sampleapp.vo.ScannedItem
+import com.example.sampleapp.viewmodel.SampleAppViewModelFactory
 import com.google.zxing.Result
 import me.dm7.barcodescanner.zxing.ZXingScannerView
 import javax.inject.Inject
@@ -41,7 +39,7 @@ class ScannerPage : Fragment(), Injectable, ZXingScannerView.ResultHandler {
 
 
     @Inject
-    lateinit var viewModelFactory: ViewModelProvider.Factory
+    lateinit var viewModelFactory: SampleAppViewModelFactory
 
     private lateinit var scannerPageViewModel: ScannerPageViewModel
     private lateinit var scannedItem: String
@@ -71,10 +69,9 @@ class ScannerPage : Fragment(), Injectable, ZXingScannerView.ResultHandler {
         scannerPageViewModel = ViewModelProviders.of(this, viewModelFactory).get(ScannerPageViewModel::class.java)
         scannerPageViewModel.scannedItemLiveData.observe(this, Observer { t ->
             t.let {
-                if(t == null) {
-                    Log.e("scanned item", "new entry")
-                } else {
-                    Log.e("scanned item", t.ScannedString)
+                if (it == 0) {
+                    if (scannedItem.isNotEmpty() || scannedItem.isNotBlank())
+                        scannerPageViewModel.addRecord()
                 }
             }
         })
@@ -96,7 +93,7 @@ class ScannerPage : Fragment(), Injectable, ZXingScannerView.ResultHandler {
 
     override fun onPause() {
         super.onPause()
-        if (cameraState == CAMERA_STARTED)
+        if (cameraState == CAMERA_STARTED || cameraState == CAMERA_RESUMED)
             pauseCamera()
     }
 
@@ -140,7 +137,9 @@ class ScannerPage : Fragment(), Injectable, ZXingScannerView.ResultHandler {
     override fun handleResult(rawResult: Result?) {
         Toast.makeText(rootView.context, rawResult?.text, Toast.LENGTH_SHORT).show()
         scannedItem = rawResult?.text ?: ""
+        scannerPageViewModel.scannedItem = scannedItem
         scannerPageViewModel.getRecordByScannedItem(scannedItem)
+
         resumeCamera()
     }
 

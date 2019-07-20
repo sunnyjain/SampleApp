@@ -1,9 +1,8 @@
 package com.example.sampleapp.extensions
 
-import android.content.res.Resources
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import com.example.sampleapp.vo.ScannedItem
+import io.reactivex.Maybe
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
@@ -27,14 +26,23 @@ fun <T> PublishSubject<T>.toLiveData(compositeDisposable: CompositeDisposable): 
 }
 
 fun <T> PublishSubject<T>.success(t: T) {
-    with(this){
-        if(t == null)
-        onNext(t)
+    with(this) {
+            onNext(t)
     }
 }
 
 
 fun <T> Single<T>.performOnBackOutOnMain(): Single<T> {
     return this.subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
+        .observeOn(AndroidSchedulers.mainThread())
+}
+
+fun <T> Maybe<T>.performOnBackOutOnMain(): Maybe<T> {
+    return this.subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+}
+
+fun <T> Observable<T>.performOnBackOutOnMain(): Observable<T> {
+    return this.subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
 }

@@ -9,7 +9,7 @@ import java.util.*
 data class ScannedItem(
     @PrimaryKey(autoGenerate = true)
     val id: Long,
-    val ScannedString: String,
-    val timeStamp: Date,
-    val isDirty: Boolean
+    var ScannedString: String,
+    var timeStamp: Date,
+    var isDirty: Boolean
     )

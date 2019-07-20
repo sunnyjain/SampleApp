@@ -11,7 +11,7 @@ import util.DateConvertor
     entities = [
         ScannedItem::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(DateConvertor::class)

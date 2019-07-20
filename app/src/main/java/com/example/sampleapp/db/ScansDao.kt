@@ -1,11 +1,9 @@
 package com.example.sampleapp.db
 
 import androidx.lifecycle.LiveData
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
+import androidx.room.*
 import com.example.sampleapp.vo.ScannedItem
+import io.reactivex.Maybe
 import io.reactivex.Single
 
 
@@ -17,6 +15,13 @@ interface ScansDao {
     @Query("SELECT * FROM ScannedItem")
     fun retrieveAllScannedRecords(): LiveData<MutableList<ScannedItem>>
 
-    @Query("SELECT * FROM ScannedItem where ScannedString = :scannedItem")
-    fun findByScannedItem(scannedItem: String) : Single<ScannedItem?>
+    @Query("SELECT * FROM ScannedItem where isDirty = 1")
+    fun retrieveDirtyRecords(): Single<List<ScannedItem>>
+
+    @Update
+    fun udpateDirtyRecords(scannedItems: List<ScannedItem>): Int
+
+
+    @Query("SELECT COUNT(*) FROM ScannedItem where ScannedString = :scannedItem")
+    fun findByScannedItem(scannedItem: String) : Maybe<Int>
 }

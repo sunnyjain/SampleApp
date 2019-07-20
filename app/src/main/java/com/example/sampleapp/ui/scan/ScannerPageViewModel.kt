@@ -14,7 +14,8 @@ class ScannerPageViewModel
 
     private val compositeDisposable = CompositeDisposable()
 
-    val scannedItemLiveData: LiveData<ScannedItem?> by lazy {
+
+    val scannedItemLiveData: LiveData<Int> by lazy {
         scannedItemRepo.fetchScannedItem.toLiveData(compositeDisposable)
     }
 
